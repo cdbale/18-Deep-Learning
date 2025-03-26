@@ -137,6 +137,7 @@ roomba_recipe <- training(roomba_split) |>
     segment ~ .
   ) |>
   step_dummy(all_nominal_predictors()) |> 
+  step_zv(all_predictors()) |>
   step_normalize(all_predictors())
 ```
 
@@ -182,10 +183,14 @@ What **coding tool** can we use to simplify this process a little bit?
 ## Functions Redux
 
 - We should try to write functions that are as *general* as possible.
-- To use tidy functions inside of our functions, note that we use `{{ }}` around variables that are used as arguments.
+- To create a `tidy` function, i.e., a function that can accept an un-quoted variable name as an argument place `{{ }}` around that variable name wherever it occurs in the function.
 
 ```{r}
 fit_accuracy <- function(fit, testing_data, truth) {
+  ###
+  # - fit: a fitted model
+  # - testing_data: test data for which predictions will be generated
+  # - truth: name of the target (Y) variable contained in testing_data
   fit |> 
     predict(new_data = testing_data) |>
     bind_cols(testing_data) |>
@@ -207,10 +212,10 @@ fit_accuracy(nn_fit_01, testing(roomba_split), segment)
 There are a *lot* of [potential hyperparameters to tune](https://playground.tensorflow.org), but we'll focus on three.
 
 - `hidden_units` the number of hidden units in the single layer
-- `epochs` the number of of training iterations
+- `epochs` the number of training iterations
 - `penalty` a penalty term to help fight overfitting
 
-The `activation` function is set based on the model mode. It isn't a numeric value that can be tuned, but you can try `"relu"` instead of the default of `"linear"` for regression and `"softmax"` for classification.
+The `activation` function is set based on the model mode. You can experiment with `"relu"` instead of the default of `"linear"` for regression and `"softmax"` for classification.
   
 ---
 
@@ -230,6 +235,17 @@ nn_wf_02 <- nn_wf_01 |>
 # Tune the hyperparameters by using the cross-validation.
 nn_tune <- nn_wf_02 |> 
   tune_grid(resamples = roomba_cv)
+```
+
+---
+
+```{r}
+nn_tune |>
+  collect_metrics(summarize = FALSE) |>
+  filter(.metric == "accuracy") |>
+  group_by(.config) |>
+  summarize(avg_accuracy = mean(.estimate)) |>
+  arrange(desc(avg_accuracy))
 ```
 
 ---
@@ -272,12 +288,6 @@ However, additional hidden layers will require a neural network more sophisticat
 
 ![](Figures/hex_reticulate.png){width=500px}
 
----
-
-<center>
-![](Figures/keras_tensorflow.png){width=800px}
-</center>
-
 ## Wrapping Up
 
 *Summary*
@@ -293,11 +303,12 @@ However, additional hidden layers will require a neural network more sophisticat
 
 - [TensorFlow for R](https://tensorflow.rstudio.com/tutorials/)
 
-## Exercise 19
+## Exercise 18
 
 Return to the set of models from the previous two exercises.
 
-1. Be sure you're making a fair comparison by fitting the previous models (hyperparameter tuning included, where applicable), on the same random training and testing split using the same recipe (i.e., you want to normalize the data for a neural net specifically but it's not going to hurt when running the other models).
-2. Fit a tuned multilayer perceptron. Create a data frame comparing all the models. Which is the best-fitting model so far? Use confusion matrices to explore how the best-fitting model is doing better than the competing models. Interpret what you find.
+1. Set up workflows for each of the three model types (decision tree, random forest, neural network). Replicate the feature engineering we did in class and use the same recipe (create dummies, remove constant features, standardize features) for all models.
+2. Train and tune each model using cross-validation on the training data (no cross validation required for the decision tree).
+3. Create a data frame comparing the performance of all three models on the test data. Which is the best-fitting model so far? Use confusion matrices to explore how the best-fitting model is doing better than the competing models. Interpret what you find. For example, is one of the models notably better at predicting one or more of the segments of interest?
 3. Render the Quarto document into Word and upload to Canvas.
 
