@@ -216,6 +216,12 @@ There are a *lot* of [potential hyperparameters to tune](https://playground.tens
 - `penalty` a penalty term to help fight overfitting
 
 The `activation` function is set based on the model mode. You can experiment with `"relu"` instead of the default of `"linear"` for regression and `"softmax"` for classification.
+
+## How Do We Tune Ourselves Spiritually?
+
+"Teaching, exhorting, and explaining - as important as they are - can never convey to an investigator, a child, a student, or a member a witness of the truthfulness of the restored gospel. Only as their faith initiates action and opens the pathway to the heart can the Holy Ghost deliver confirming witnesses. Missionaries, parents, teachers, and leaders obviously must learn to teach by the power of the Spirit. Of equal importance, however, is the responsibility they have to help others learn for themselves by faith."
+
+Elder Bednar, "Learning in the Lord's Way", October 2018.
   
 ---
 
