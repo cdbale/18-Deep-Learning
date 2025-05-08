@@ -1,0 +1,178 @@
+---
+title: "Exercise 19"
+author: "Marc Dotson"
+format: docx
+---
+
+Return to the set of models from the previous two exercises.
+
+1. Be sure you're making a fair comparison by fitting the previous models (hyperparameter tuning included, where applicable), on the same random training and testing split using the same recipe (i.e., you want to normalize the data for a neural net specifically but it's not going to hurt when running the other models).
+2. Fit a tuned multilayer perceptron. Create a data frame comparing all the models. Which is the best-fitting model so far? Use confusion matrices to explore how the best-fitting model is doing better than the competing models. Interpret what you find.
+3. Render the Quarto document into Word and upload to Canvas.
+
+**Five points total, one point each for:**
+
+- **Doing an initial random split of the data.**
+- **Fitting a logistic regression, tuned decision tree, and tuned random forest using the same data and recipe.**
+- **Fitting a tuned multilayer perceptron on the same data.**
+- **Creating a data frame to compare all of the models on the same testing data along with confusion matrices to help interpret why the best-fitting model is best.**
+- **Submitting a rendered Word document.**
+
+## Data Prep and Feature Engineering
+
+We are again encoding `segment` as two categories and using the same predictors as before.
+
+```{r}
+# Load packages.
+library(tidyverse)
+library(tidymodels)
+
+# Set the seed.
+set.seed(42)
+
+# Import data and wrangle S1 into segment.
+roomba_survey <- read_csv(here::here("Data", "roomba_survey.csv")) |> 
+  rename(segment = S1) |> 
+  mutate(
+    segment = case_when(
+      segment == 1 ~ "own or shopping",
+      segment == 3 ~ "own or shopping",
+      segment == 4 ~ "considering"
+    ),
+    segment = factor(segment)
+  )
+
+# Split data based on segment.
+roomba_split <- initial_split(roomba_survey, prop = 0.75, strata = segment)
+
+# Use v-fold cross-validation based on segment.
+roomba_cv <- vfold_cv(training(roomba_split), v = 10, strata = segment)
+
+# Feature engineering.
+roomba_recipe <- training(roomba_split) |>
+  recipe(
+    segment ~ CleaningAttitudes_1 + CleaningAttitudes_2 + CleaningAttitudes_3 + 
+      CleaningAttitudes_4 + CleaningAttitudes_5 + CleaningAttitudes_6 + 
+      CleaningAttitudes_7 + CleaningAttitudes_8 + CleaningAttitudes_9 + 
+      CleaningAttitudes_10 + CleaningAttitudes_11 +
+      D1Gender + D2HomeType + D3Neighborhood + D4MaritalStatus
+  ) |>
+  step_dummy(all_nominal_predictors()) |> 
+  step_normalize(all_predictors())
+```
+
+## Fit Models
+
+Let's fit all of the competing models on the same training data.
+
+```{r}
+# Logistic regression.
+roomba_lr <- logistic_reg() |> 
+  set_engine(engine = "glm")
+
+roomba_wf_lr <- workflow() |> 
+  add_recipe(roomba_recipe) |> 
+  add_model(roomba_lr)
+
+fit_lr <- fit(roomba_wf_lr, data = training(roomba_split))
+
+# Decision tree.
+roomba_dt <- decision_tree(tree_depth = tune(), min_n = tune()) |> 
+  set_engine(engine = "rpart") |> 
+  set_mode("classification")
+
+roomba_wf_dt <- roomba_wf_lr |> 
+  update_model(roomba_dt)
+
+tune_dt <- tune_grid(roomba_wf_dt, resamples = roomba_cv)
+
+tune_dt_best <- tune_dt |> 
+  select_best(metric = "accuracy")
+
+roomba_wf_dt <- roomba_wf_dt |> 
+  finalize_workflow(tune_dt_best)
+
+fit_dt <- fit(roomba_wf_dt, data = training(roomba_split))
+
+# Random forest.
+roomba_rf <- rand_forest(mtry = tune(), trees = tune(), min_n = tune()) |> 
+  set_engine(engine = "randomForest") |> 
+  set_mode("classification")
+
+roomba_wf_rf <- roomba_wf_lr |> 
+  update_model(roomba_rf)
+
+tune_rf <- tune_grid(roomba_wf_rf, resamples = roomba_cv)
+
+tune_rf_best <- tune_rf |> 
+  select_best(metric = "accuracy")
+
+roomba_wf_rf <- roomba_wf_rf |> 
+  finalize_workflow(tune_rf_best)
+
+fit_rf <- fit(roomba_wf_rf, data = training(roomba_split))
+
+# Neural network.
+roomba_nn <- mlp(hidden_units = tune(), epochs = tune(), penalty = tune()) |> 
+  set_engine(engine = "nnet") |> 
+  set_mode("classification")
+
+roomba_wf_nn <- roomba_wf_lr |> 
+  update_model(roomba_nn)
+
+tune_nn <- tune_grid(roomba_wf_nn, resamples = roomba_cv)
+
+tune_nn_best <- tune_nn |> 
+  select_best(metric = "accuracy")
+
+roomba_wf_nn <- roomba_wf_nn |> 
+  finalize_workflow(tune_nn_best)
+
+fit_nn <- fit(roomba_wf_nn, data = training(roomba_split))
+```
+
+## Compare Predictive Fit
+
+Let's create a data frame to compare predictive fit using a function.
+
+```{r}
+# Fit accuracy function.
+fit_accuracy <- function(fit, testing_data, truth) {
+  fit |> 
+    predict(new_data = testing_data) |>
+    bind_cols(testing_data) |>
+    accuracy(truth = {{truth}}, estimate = .pred_class)
+}
+
+# Create a table of predictive fit.
+bind_cols(
+  model = c("lr", "dt", "rf", "nn"),
+  bind_rows(
+    fit_accuracy(fit = fit_lr, testing_data = testing(roomba_split), truth = segment),
+    fit_accuracy(fit = fit_dt, testing_data = testing(roomba_split), truth = segment),
+    fit_accuracy(fit = fit_rf, testing_data = testing(roomba_split), truth = segment),
+    fit_accuracy(fit = fit_nn, testing_data = testing(roomba_split), truth = segment)
+  )
+)
+```
+
+The random forest performs best with a predictive accuracy of `0.702`. The next-best is a two-way tie between logisitc regression and the decision tree. Unsurprisingly, given how little data we have and the simplicity of the classification problem, the neural network performs worse.
+
+Let's use confusion matrices to explore why the random forest is doing better.
+
+```{r}
+# Confusion matrix function.
+conf_matrix <- function(fit, testing_data, truth) {
+  fit |> 
+    predict(new_data = testing_data) |>
+    bind_cols(testing_data) |>
+    conf_mat(truth = {{truth}}, estimate = .pred_class)
+}
+
+conf_matrix(fit = fit_lr, testing_data = testing(roomba_split), truth = segment)
+conf_matrix(fit = fit_dt, testing_data = testing(roomba_split), truth = segment)
+conf_matrix(fit = fit_rf, testing_data = testing(roomba_split), truth = segment)
+```
+
+The random forest does better by being able to correctly predict the smaller of the two segments. This is what better accuracy works -- small improvements can result in big gains.
+
