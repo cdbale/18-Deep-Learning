@@ -1,6 +1,6 @@
 ---
 title: "Deep Learning"
-subtitle: "MKTG 411 Marketing Analytics"
+subtitle: "MCB Consulting Group (MKTG 411)"
 output: 
   ioslides_presentation:
     widescreen: true
@@ -28,7 +28,7 @@ output:
 **Deep learning** is a type of machine learning that uses **neural networks** to essentially automate feature engineering by progressively extracting regular features from the data.
 
 - A key focus for **artificial intelligence**, which has been studied for a long time, is to create a model that mimics the way the human mind works.
-- Neural networks are a result of these (mixed results) efforts, with **hidden units** (a.k.a., neurons) encoding different feature engineering-like transformations of the data in order to predict the outcome.
+- Neural networks are a result of these efforts, with **hidden units** (a.k.a., neurons) encoding different feature engineering-like transformations of the data in order to predict the outcome.
 
 Simple, *right*?!
 
@@ -40,7 +40,7 @@ Simple, *right*?!
 
 - $x_1$ through $x_3$ are the *predictor* inputs.
 - The *output* is the outcome variable $y$.
-- The neuron *combines* the inputs with some weight for each and then *transforms* the combination before passing it on.
+- The neuron *combines* the inputs with weights and then *transforms* the combination before passing it on.
 - Together this **combination function** and **transfer function** are called an **activation function**.
 
 ---
@@ -51,11 +51,14 @@ Each neuron is a linear combination of the inputs (and then a transformation) ba
 ![](Figures/nn_01.png){width=500px}
 </center>
 
-If we have a binary outcome variable with a **softmax** (i.e., logistic) activation function, this neural network would be logistic regression.
+Neural networks can be similar to models we've already seen!
+
+- Linear regression
+- Logistic regression
 
 ## Neural Networks
 
-What makes it a neural *network* is including multiple neurons (i.e., hidden units) and potentially multiple **hidden layers** (hidden just means they aren't inputs or outputs).
+To get a *neural network* we utilize multiple neurons (i.e., hidden units) and potentially multiple **hidden layers** (hidden just means they aren't direct inputs or outputs).
 
 <center>
 ![](Figures/nn_02.png){width=500px}
@@ -74,6 +77,16 @@ Having more than one hidden layer is what makes a neural network *deep*.
 ![](Figures/nn_03.png){width=500px}
 </center>
 
+Let's [visualize how this works](https://www.youtube.com/shorts/hRIJc9jRpts).
+
+---
+
+Having more than one hidden layer is what makes a neural network *deep*.
+
+<center>
+![](Figures/nn_03.png){width=500px}
+</center>
+
 Let's [visualize how this works](https://www.youtube.com/watch?v=sDDjJRnnHao).
 
 ## Ready to Train a Neural Network?
@@ -82,33 +95,31 @@ Install the `nnet` package!
 
 ## Preliminaries
 
-Load libraries and set a random seed.
+Load libraries.
 
 ```{r message=FALSE, warning=FALSE}
 # Load packages, set seed.
 library(tidyverse)
 library(tidymodels)
-set.seed(42)
 ```
 
 ## Data Wrangling
 
 ```{r message=FALSE, warning=FALSE}
 # Import data, wrangle S1 into segment, coerce factors, and select predictors.
-roomba_survey <- read_csv(here::here("Data", "roomba_survey.csv")) |> 
+roomba_survey <- read_csv("roomba_survey.csv") |> 
   rename(segment = S1) |> 
   mutate(
     segment = case_when(
       segment == 1 ~ "own",
       segment == 3 ~ "shopping",
-      segment == 4 ~ "considering"
-    ),
+      segment == 4 ~ "considering"),
+    # convert numeric categorical variables into factors for dummies
     segment = factor(segment),
     D2HomeType = factor(D2HomeType),
     D3Neighborhood = factor(D3Neighborhood),
     D4MaritalStatus = factor(D4MaritalStatus),
-    D6Education = factor(D6Education)
-  ) |> 
+    D6Education = factor(D6Education)) |> 
   select(
     segment, contains("RelatedBehaviors"), contains("ShoppingAttitudes"), 
     D1Gender, D2HomeType, D3Neighborhood, D4MaritalStatus, D6Education
@@ -128,6 +139,8 @@ $X^{norm} = \frac{X - \mu_X}{\sigma_X}$
 ---
 
 ```{r}
+set.seed(42)
+
 # Split data based on segment.
 roomba_split <- initial_split(roomba_survey, prop = 0.75, strata = segment)
 
@@ -136,8 +149,12 @@ roomba_recipe <- training(roomba_split) |>
   recipe(
     segment ~ .
   ) |>
+  # create dummy variables - using all_nominal_predictors(),
+  # rather than all_nominal(), -segment
   step_dummy(all_nominal_predictors()) |> 
+  # remove variables that have a single value (zero variance) - why?
   step_zv(all_predictors()) |>
+  # normalize all predictors
   step_normalize(all_predictors())
 ```
 
@@ -180,7 +197,7 @@ So far, we have repeated the same steps every time we want to evaluate a model.
 
 What **coding tool** can we use to simplify this process a little bit?
 
-## Functions Redux
+## Functions Review
 
 - We should try to write functions that are as *general* as possible.
 - To create a `tidy` function, i.e., a function that can accept an un-quoted variable name as an argument place `{{ }}` around that variable name wherever it occurs in the function.
@@ -191,10 +208,12 @@ fit_accuracy <- function(fit, testing_data, truth) {
   # - fit: a fitted model
   # - testing_data: test data for which predictions will be generated
   # - truth: name of the target (Y) variable contained in testing_data
-  fit |> 
+  eval_results <- fit |> 
     predict(new_data = testing_data) |>
     bind_cols(testing_data) |>
     accuracy(truth = {{truth}}, estimate = .pred_class)
+  
+  return(eval_results)
 }
 ```
 
@@ -206,6 +225,8 @@ Let's look at the accuracy on the testing data.
 # Compute model accuracy.
 fit_accuracy(nn_fit_01, testing(roomba_split), segment)
 ```
+
+**OOF!**
 
 ## Hyperparameter Tuning
 
@@ -286,13 +307,9 @@ fit_accuracy(nn_fit_02, testing(roomba_split), segment)
 
 Neural networks can be powerful prediction engines. However, they often require a *lot* of data and can be slow to train. As with every predictive model, there is no guarantee it will predict best for a given application.
 
-While adding additional hidden units can help uncover finer structures in the data, adding additional hidden layers allows for increasingly nonlinear relationships between the predictors and the outcome.
+Adding additional hidden units can help uncover finer structures in the data and allow for nonlinear relationships between the predictors and the outcome.
 
-However, additional hidden layers will require a neural network more sophisticated than a multilayer perceptron.
-
----
-
-![](Figures/hex_reticulate.png){width=500px}
+However, additional hidden layers will require a neural network more sophisticated than a multilayer perceptron, and increase the risk of overfitting.
 
 ## Wrapping Up
 
@@ -309,12 +326,59 @@ However, additional hidden layers will require a neural network more sophisticat
 
 - [TensorFlow for R](https://tensorflow.rstudio.com/tutorials/)
 
-## Exercise 18
+## True or False?
+
+Your life is influenced by a neural network *every day*.
+
+## True or False?
+
+Your life is influenced by a neural network *every day*.
+
+Let's [see just one example](https://www.youtube.com/watch?v=LPZh9BOjkQs).
+
+## Exercise 16
 
 Return to the set of models from the previous two exercises.
 
-1. Set up workflows for each of the three model types (decision tree, random forest, neural network). Replicate the feature engineering we did in class and use the same recipe (create dummies, remove constant features, standardize features) for all models.
-2. Train and tune each model using cross-validation on the training data (no cross validation required for the decision tree).
+1. Set up workflows for a decision tree, a random forest, and a neural network. Be sure you're making a fair comparison by fitting the previous models (hyperparameter tuning included, where applicable), on the same random training and testing split using the same recipe (i.e., you should create dummies, remove constant features, and standardize features for all models.
+2. Train and tune each model (except the logistic regression since it doesn't have hyperparameters) using cross-validation on the training data.
 3. Create a data frame comparing the performance of all three models on the test data. Which is the best-fitting model so far? Use confusion matrices to explore how the best-fitting model is doing better than the competing models. Interpret what you find. For example, is one of the models notably better at predicting one or more of the segments of interest?
-3. Render the Quarto document into Word and upload to Canvas.
+4. Render the Quarto document into Word and upload to Canvas.
 
+## Live Coding
+
+Let's compare our most complicated model (neural network) to our simplest model (logistic regression) to predict response to the most recent marketing campaign in the iFood data.
+
+```{r}
+# Load packages.
+
+# Set the seed.
+
+# Import data and wrangle our dependent variable
+
+# Split data
+
+# Create v-fold cross-validation
+
+# create recipe (Feature engineering)
+```
+
+Logistic regression modeling.
+
+```{r}
+# create model
+
+# create workflow
+
+# fit workflow to CV folds
+
+# compute accuracy
+```
+
+Neural network modeling.
+
+```{r}
+# repeat the above for the neural network, with tuning
+```
+
+Which model did better? Use the best model on the test data.

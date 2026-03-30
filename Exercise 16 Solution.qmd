@@ -1,14 +1,15 @@
 ---
-title: "Exercise 19"
-author: "Marc Dotson"
+title: "Exercise 16"
+author: "Cameron Bale"
 format: docx
 ---
 
 Return to the set of models from the previous two exercises.
 
-1. Be sure you're making a fair comparison by fitting the previous models (hyperparameter tuning included, where applicable), on the same random training and testing split using the same recipe (i.e., you want to normalize the data for a neural net specifically but it's not going to hurt when running the other models).
-2. Fit a tuned multilayer perceptron. Create a data frame comparing all the models. Which is the best-fitting model so far? Use confusion matrices to explore how the best-fitting model is doing better than the competing models. Interpret what you find.
-3. Render the Quarto document into Word and upload to Canvas.
+1. Set up workflows for a decision tree, a random forest, and a neural network. Be sure you're making a fair comparison by fitting the previous models (hyperparameter tuning included, where applicable), on the same random training and testing split using the same recipe (i.e., you should create dummies, remove constant features, and standardize features for all models.
+2. Train and tune each model (except the logistic regression since it doesn't have hyperparameters) using cross-validation on the training data.
+3. Create a data frame comparing the performance of all three models on the test data. Which is the best-fitting model so far? Use confusion matrices to explore how the best-fitting model is doing better than the competing models. Interpret what you find. For example, is one of the models notably better at predicting one or more of the segments of interest?
+4. Render the Quarto document into Word and upload to Canvas.
 
 **Five points total, one point each for:**
 
@@ -31,7 +32,7 @@ library(tidymodels)
 set.seed(42)
 
 # Import data and wrangle S1 into segment.
-roomba_survey <- read_csv(here::here("Data", "roomba_survey.csv")) |> 
+roomba_survey <- read_csv("roomba_survey.csv") |> 
   rename(segment = S1) |> 
   mutate(
     segment = case_when(
@@ -133,7 +134,7 @@ fit_nn <- fit(roomba_wf_nn, data = training(roomba_split))
 
 ## Compare Predictive Fit
 
-Let's create a data frame to compare predictive fit using a function.
+Let's create a data frame and compare predictive fit using a function.
 
 ```{r}
 # Fit accuracy function.
@@ -156,9 +157,9 @@ bind_cols(
 )
 ```
 
-The random forest performs best with a predictive accuracy of `0.702`. The next-best is a two-way tie between logisitc regression and the decision tree. Unsurprisingly, given how little data we have and the simplicity of the classification problem, the neural network performs worse.
+The neural network performs best with a predictive accuracy of `0.702`. The next-best is a two-way tie between logisitc regression and the decision tree.
 
-Let's use confusion matrices to explore why the random forest is doing better.
+Let's use confusion matrices to explore why the neural network is doing better.
 
 ```{r}
 # Confusion matrix function.
@@ -171,8 +172,9 @@ conf_matrix <- function(fit, testing_data, truth) {
 
 conf_matrix(fit = fit_lr, testing_data = testing(roomba_split), truth = segment)
 conf_matrix(fit = fit_dt, testing_data = testing(roomba_split), truth = segment)
-conf_matrix(fit = fit_rf, testing_data = testing(roomba_split), truth = segment)
+conf_matrix(fit = fit_nn, testing_data = testing(roomba_split), truth = segment)
 ```
 
-The random forest does better by being able to correctly predict the smaller of the two segments. This is what better accuracy works -- small improvements can result in big gains.
+The final predictions from these three models are incredibly similar. The decision tree is predicting everyone as considering. The logistic regression correctly predicts one person as own or shopping, but also gets a false positive, which is why the accuracy is the same as the decision tree. The neural network is able to correctly predict one person as own or shopping without a false positive prediction as well, which is why it edges out these other models on accuracy.
 
+Ultimately, we should go back and make our model selection based on the cross-validation results, not a single test data set.

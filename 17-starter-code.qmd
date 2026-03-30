@@ -1,0 +1,229 @@
+---
+title: "Deep Learning Starter Code"
+format: docx
+editor: visual
+---
+
+# Ready to Train a Neural Network?
+
+Install the `nnet` package!
+
+```{r}
+
+```
+
+Load libraries.
+
+```{r}
+# Load packages
+library(tidyverse)
+library(tidymodels)
+```
+
+# Data Wrangling
+
+```{r}
+# Import data, wrangle S1 into segment, coerce factors, and select predictors.
+roomba_survey <- read_csv("roomba_survey.csv") |> 
+  rename(segment = S1) |> 
+  mutate(
+    segment = case_when(
+      segment == 1 ~ "own",
+      segment == 3 ~ "shopping",
+      segment == 4 ~ "considering"),
+    # convert numeric categorical variables into factors for dummies
+    segment = factor(segment),
+    D2HomeType = factor(D2HomeType),
+    D3Neighborhood = factor(D3Neighborhood),
+    D4MaritalStatus = factor(D4MaritalStatus),
+    D6Education = factor(D6Education)) |> 
+  select(
+    segment, contains("RelatedBehaviors"), contains("ShoppingAttitudes"), 
+    D1Gender, D2HomeType, D3Neighborhood, D4MaritalStatus, D6Education
+  )
+```
+
+# Feature Engineering
+
+```{r}
+set.seed(42)
+
+# Split data based on segment.
+roomba_split <- initial_split(roomba_survey, prop = 0.75, strata = segment)
+
+# Feature engineering.
+roomba_recipe <- training(roomba_split) |>
+  recipe(
+    segment ~ .
+  ) |>
+  # create dummy variables - using all_nominal_predictors(),
+  # rather than all_nominal(), -segment
+  step_dummy(all_nominal_predictors()) |> 
+  # remove variables that have a single value (zero variance) - why?
+  step_zv(all_predictors()) |>
+  # normalize all predictors
+  step_normalize(all_predictors())
+```
+
+# Fit a Multilayer Perceptron
+
+There are *many* different types of neural networks. A common one is a **multilayer perceptron**, which has a single hidden layer.
+
+```{r}
+# Set the model, engine, and mode.
+nn_model_01 <- mlp() |> 
+  set_engine(engine = "nnet") |> 
+  set_mode("classification")
+
+nn_model_01
+```
+
+Create a workflow that combines the recipe and model and fit it.
+
+```{r}
+# Create a workflow.
+nn_wf_01 <- workflow() |> 
+  add_recipe(roomba_recipe) |> 
+  add_model(nn_model_01)
+
+# Fit the workflow.
+nn_fit_01 <- fit(nn_wf_01, data = training(roomba_split))
+```
+
+# Model Evaluation
+
+So far, we have repeated the same steps every time we want to evaluate a model.
+
+* Generate predictions from the fitted model for the `test` data
+* Join the predictions as a new column in the `test` data
+* Compute the accuracy using the prediction column and the column of true values
+
+# Functions Review
+
+- We should try to write functions that are as *general* as possible.
+- To create a `tidy` function, i.e., a function that can accept an un-quoted variable name as an argument place `{{ }}` around that variable name wherever it occurs in the function.
+
+```{r}
+fit_accuracy <- function(fit, testing_data, truth) {
+  ###
+  # - fit: a fitted model
+  # - testing_data: test data for which predictions will be generated
+  # - truth: name of the target (Y) variable contained in testing_data
+  eval_results <- fit |> 
+    predict(new_data = testing_data) |>
+    bind_cols(testing_data) |>
+    accuracy(truth = {{truth}}, estimate = .pred_class)
+  
+  return(eval_results)
+}
+```
+
+Let's look at the accuracy on the testing data.
+
+```{r}
+# Compute model accuracy.
+fit_accuracy(nn_fit_01, testing(roomba_split), segment)
+```
+
+**OOF!** That accuracy isn't great.
+
+# Hyperparameter Tuning
+
+There are a *lot* of [potential hyperparameters to tune](https://playground.tensorflow.org), but we'll focus on three.
+
+- `hidden_units` the number of hidden units in the single layer
+- `epochs` the number of training iterations
+- `penalty` a penalty term to help fight overfitting
+
+The `activation` function is set based on the model mode. You can experiment with `"relu"` instead of the default of `"linear"` for regression and `"softmax"` for classification.
+
+```{r}
+# Set up v-fold cross-validation based on segment.
+roomba_cv <- vfold_cv(training(roomba_split), v = 10, strata = segment)
+
+# Set the model, engine, and mode.
+nn_model_02 <- mlp(hidden_units = tune(), epochs = tune(), penalty = tune()) |> 
+  set_engine(engine = "nnet") |> 
+  set_mode("classification")
+
+# Update the workflow.
+nn_wf_02 <- nn_wf_01 |> 
+  update_model(nn_model_02)
+
+# Tune the hyperparameters by using cross-validation.
+nn_tune <- nn_wf_02 |> 
+  tune_grid(resamples = roomba_cv)
+```
+
+Let's examine the accuracy for each model version displayed in descending order of accuracy.
+
+```{r}
+nn_tune |>
+  collect_metrics(summarize = FALSE) |>
+  filter(.metric == "accuracy") |>
+  group_by(.config) |>
+  summarize(avg_accuracy = mean(.estimate)) |>
+  arrange(desc(avg_accuracy))
+```
+
+Select the best model and finalize our workflow.
+
+```{r}
+# Select the best fitting model.
+nn_tune_best <- nn_tune |> 
+  select_best(metric = "accuracy")
+
+# Finalize the workflow.
+nn_wf_final <- nn_wf_02 |> 
+  finalize_workflow(nn_tune_best)
+
+nn_wf_final
+```
+
+Now let's fit the finalized workflow on the entire training data.
+
+```{r}
+# Fit the tuned workflow to the whole training data set
+nn_fit_02 <- fit(nn_wf_final, data = training(roomba_split))
+
+# Compute model accuracy.
+fit_accuracy(nn_fit_02, testing(roomba_split), segment)
+```
+
+## Live Coding
+
+Let's compare our most complicated model (neural network) to our simplest model (logistic regression) to predict response to the most recent marketing campaign in the iFood data.
+
+```{r}
+# Load packages.
+
+# Set the seed.
+
+# Import data and wrangle our dependent variable
+
+# Split data
+
+# Create v-fold cross-validation
+
+# create recipe (Feature engineering)
+```
+
+Logistic regression modeling.
+
+```{r}
+# create model
+
+# create workflow
+
+# fit workflow to CV folds
+
+# compute accuracy
+```
+
+Neural network modeling.
+
+```{r}
+# repeat the above for the neural network, with tuning
+```
+
+Which model did better? Use the best model on the test data.
