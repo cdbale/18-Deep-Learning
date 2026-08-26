@@ -1,0 +1,112 @@
+---
+title: "Neural Network vs. Logistic Regression"
+format: docx
+editor: visual
+---
+
+Let's compare our most complicated model (neural network) to our simplest model (logistic regression) to predict response to the most recent marketing campaign in the iFood data.
+
+```{r}
+# Load packages.
+
+# Set the seed.
+set.seed(916)
+
+# Import data and wrangle our dependent variable
+ifood <- read_csv("ifood.csv")
+```
+
+Let's do some data cleaning.
+
+Let's first drop observations with missing values.
+
+```{r}
+ifood <- ifood |>
+  drop_na()
+```
+
+Next, let's handle 'nonsense' values for marital status.
+
+```{r}
+ifood |>
+  distinct(Marital_Status)
+
+drop_marital <- c("Alone", "Absurd", "YOLO")
+
+ifood <- ifood |>
+  filter(!Marital_Status %in% drop_marital) |>
+  select(-Dt_Customer)
+```
+
+Let's construct segments based on the number of responses to past marketing campaigns.
+
+```{r}
+ifood <- ifood |>
+  mutate(total_responses = AcceptedCmp3 +
+           AcceptedCmp1 +
+           AcceptedCmp2 +
+           AcceptedCmp4 +
+           AcceptedCmp5 +
+           Response)
+```
+
+Construct a histogram showing the number of responses for consumers.
+
+```{r}
+ifood |>
+  ggplot(aes(x = total_responses)) +
+  geom_histogram()
+```
+
+Let's define our target variable `segment` based on the number of past campaign responses.
+
+```{r}
+ifood <- ifood |>
+  mutate(segment = case_when(
+    total_responses == 0 ~ "Non-responsive",
+    total_responses == 1 ~ "Somewhat responsive",
+    total_responses %in% c(2, 3, 4, 5) ~ "Highly Responsive"),
+    segment = factor(segment))
+```
+
+## Pre-processing Steps
+
+```{r}
+# Split data
+ifood_split <- initial_split(ifood, prop = 0.80, strata = segment)
+
+# Create v-fold cross-validation
+cv_split <- vfold_cv(training(ifood_split), v = 8, strata = segment)
+
+# create recipe (Feature engineering)
+ifood_recipe <- training(ifood_split) |>
+  recipe(segment ~ .) |>
+  # create dummy variables - using all_nominal_predictors(),
+  # rather than all_nominal(), -segment
+  step_dummy(all_nominal_predictors()) |> 
+  # remove variables that have a single value (zero variance) - why?
+  step_zv(all_predictors()) |>
+  # normalize all predictors
+  step_normalize(all_predictors())
+```
+
+Logistic regression modeling.
+
+```{r}
+# create model
+lr_model <- logistic_reg() |>
+  set_engine("glm")
+
+# create workflow
+lr_workflow <- workflow() |>
+  add_recipe(ifood_recipe) |>
+  add_model(lr_model)
+
+# fit workflow to CV folds
+lr_cv_results <- lr_workflow |>
+  fit_resamples(cv_split)
+
+# compute accuracy
+```
+
+Neural network modeling.

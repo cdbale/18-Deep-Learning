@@ -9,7 +9,7 @@ editor: visual
 Install the `nnet` package!
 
 ```{r}
-
+install.packages('nnet')
 ```
 
 Load libraries.
@@ -94,14 +94,14 @@ nn_fit_01 <- fit(nn_wf_01, data = training(roomba_split))
 
 So far, we have repeated the same steps every time we want to evaluate a model.
 
-* Generate predictions from the fitted model for the `test` data
-* Join the predictions as a new column in the `test` data
-* Compute the accuracy using the prediction column and the column of true values
+-   Generate predictions from the fitted model for the `test` data
+-   Join the predictions as a new column in the `test` data
+-   Compute the accuracy using the prediction column and the column of true values
 
 # Functions Review
 
-- We should try to write functions that are as *general* as possible.
-- To create a `tidy` function, i.e., a function that can accept an un-quoted variable name as an argument place `{{ }}` around that variable name wherever it occurs in the function.
+-   We should try to write functions that are as *general* as possible.
+-   To create a `tidy` function, i.e., a function that can accept an un-quoted variable name as an argument place `{{ }}` around that variable name wherever it occurs in the function.
 
 ```{r}
 fit_accuracy <- function(fit, testing_data, truth) {
@@ -131,9 +131,9 @@ fit_accuracy(nn_fit_01, testing(roomba_split), segment)
 
 There are a *lot* of [potential hyperparameters to tune](https://playground.tensorflow.org), but we'll focus on three.
 
-- `hidden_units` the number of hidden units in the single layer
-- `epochs` the number of training iterations
-- `penalty` a penalty term to help fight overfitting
+-   `hidden_units` the number of hidden units in the single layer
+-   `epochs` the number of training iterations
+-   `penalty` a penalty term to help fight overfitting
 
 The `activation` function is set based on the model mode. You can experiment with `"relu"` instead of the default of `"linear"` for regression and `"softmax"` for classification.
 
@@ -201,11 +201,37 @@ Let's compare our most complicated model (neural network) to our simplest model 
 
 # Import data and wrangle our dependent variable
 
+```
+
+Let's construct segments based on the number of responses to past marketing campaigns.
+
+```{r}
+
+```
+
+Construct a histogram showing the number of responses for consumers.
+
+```{r}
+
+```
+
+Let's define our target variable `segment` based on the number of past campaign responses.
+
+```{r}
+
+```
+
+## Pre-processing Steps
+
+```{r}
 # Split data
+
 
 # Create v-fold cross-validation
 
+
 # create recipe (Feature engineering)
+
 ```
 
 Logistic regression modeling.
